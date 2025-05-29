@@ -91,12 +91,27 @@ class MonteCarloAgent(commons.AbstractAgent):
         self.returns_count = defaultdict(lambda: defaultdict(int))
 
     def _state_to_key(self, state_obs):
-        """Simple state representation using only agent position for manageable state space."""
+        """Enhanced state representation using position plus minimal context."""
         if isinstance(state_obs, dict) and 'blstats' in state_obs:
-            # Use only the agent's x,y position as state
-            x_pos = state_obs['blstats'][0]
+            # Agent position
+            x_pos = state_obs['blstats'][0] 
             y_pos = state_obs['blstats'][1]
-            return (x_pos, y_pos)
+            
+            # Add minimal context from immediate surroundings
+            context = []
+            if 'chars' in state_obs:
+                chars = state_obs['chars']
+                if len(chars.shape) >= 2:
+                    # Check immediate neighbors (4-connected)
+                    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # N, S, E, W
+                    for dx, dy in directions:
+                        new_x, new_y = x_pos + dx, y_pos + dy
+                        if 0 <= new_x < chars.shape[0] and 0 <= new_y < chars.shape[1]:
+                            context.append(chars[new_x, new_y])
+                        else:
+                            context.append(-1)  # Out of bounds marker
+            
+            return (x_pos, y_pos, tuple(context))
         elif isinstance(state_obs, (np.ndarray, list, tuple)):
             if isinstance(state_obs, np.ndarray):
                 return tuple(state_obs.flatten().tolist())
@@ -181,24 +196,35 @@ class SARSAAgent(commons.AbstractAgent):
         self.last_updated_q = None # Initialize tracker for the last Q-value updated
 
     def _state_to_key(self, state_obs):
-        """Converts an observation to a hashable key for the Q-table.
-           Identical to MonteCarloAgent's version for now.
-        """
+        """Enhanced state representation using position plus minimal context."""
         if isinstance(state_obs, dict) and 'blstats' in state_obs:
-            # Use only the agent's x,y position as state
-            x_pos = state_obs['blstats'][0]
+            # Agent position
+            x_pos = state_obs['blstats'][0] 
             y_pos = state_obs['blstats'][1]
-            return (x_pos, y_pos)
+            
+            # Add minimal context from immediate surroundings
+            context = []
+            if 'chars' in state_obs:
+                chars = state_obs['chars']
+                if len(chars.shape) >= 2:
+                    # Check immediate neighbors (4-connected)
+                    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # N, S, E, W
+                    for dx, dy in directions:
+                        new_x, new_y = x_pos + dx, y_pos + dy
+                        if 0 <= new_x < chars.shape[0] and 0 <= new_y < chars.shape[1]:
+                            context.append(chars[new_x, new_y])
+                        else:
+                            context.append(-1)  # Out of bounds marker
+            
+            return (x_pos, y_pos, tuple(context))
         elif isinstance(state_obs, (np.ndarray, list, tuple)):
-            # Attempt to convert elements to a basic type if they are numpy types
             if isinstance(state_obs, np.ndarray):
-                return tuple(state_obs.flatten().tolist()) # Flatten and convert to list of python types
-            # For lists/tuples, ensure elements are hashable (e.g. not other lists)
+                return tuple(state_obs.flatten().tolist())
             try:
                 return tuple(map(lambda x: tuple(x) if isinstance(x, np.ndarray) else x, state_obs))
             except TypeError:
-                return str(state_obs) # Fallback if elements are not easily convertible
-        return str(state_obs) # Fallback for other types
+                return str(state_obs)
+        return str(state_obs)
 
     def act(self, state_obs):
         state_key = self._state_to_key(state_obs)
@@ -224,7 +250,6 @@ class SARSAAgent(commons.AbstractAgent):
                     best_actions = [action_idx]
                 elif q_val == max_q:
                     best_actions.append(action_idx)
-            
             if not best_actions: # Fallback if all Q-values are -inf or state not found (should be rare)
                 return self.action_space.sample()
             return random.choice(best_actions)
@@ -274,12 +299,27 @@ class QLearningAgent(commons.AbstractAgent):
         self.last_updated_q = None # Initialize tracker for the last Q-value updated
 
     def _state_to_key(self, state_obs):
-        """Simple state representation using only agent position for manageable state space."""
+        """Enhanced state representation using position plus minimal context."""
         if isinstance(state_obs, dict) and 'blstats' in state_obs:
-            # Use only the agent's x,y position as state
-            x_pos = state_obs['blstats'][0]
+            # Agent position
+            x_pos = state_obs['blstats'][0] 
             y_pos = state_obs['blstats'][1]
-            return (x_pos, y_pos)
+            
+            # Add minimal context from immediate surroundings
+            context = []
+            if 'chars' in state_obs:
+                chars = state_obs['chars']
+                if len(chars.shape) >= 2:
+                    # Check immediate neighbors (4-connected)
+                    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # N, S, E, W
+                    for dx, dy in directions:
+                        new_x, new_y = x_pos + dx, y_pos + dy
+                        if 0 <= new_x < chars.shape[0] and 0 <= new_y < chars.shape[1]:
+                            context.append(chars[new_x, new_y])
+                        else:
+                            context.append(-1)  # Out of bounds marker
+            
+            return (x_pos, y_pos, tuple(context))
         elif isinstance(state_obs, (np.ndarray, list, tuple)):
             if isinstance(state_obs, np.ndarray):
                 return tuple(state_obs.flatten().tolist())
@@ -312,12 +352,11 @@ class QLearningAgent(commons.AbstractAgent):
                     best_actions = [action_idx]
                 elif q_val == max_q:
                     best_actions.append(action_idx)
-            
-            if not best_actions:
+            if not best_actions: # Fallback if all Q-values are -inf or state not found (should be rare)
                 return self.action_space.sample()
             return random.choice(best_actions)
 
-    def learn(self, state, action, reward, next_state, next_action_on_policy, done, truncated): # next_action_on_policy is not used by Q-learning
+    def learn(self, state, action, reward, next_state, next_action_on_policy, done, truncated):
         if not self.learning:
             return
 
@@ -331,14 +370,12 @@ class QLearningAgent(commons.AbstractAgent):
             self._ensure_q_state_exists(next_state_key) # Ensure Q-values for next_state_key are initialized
             q_values_for_next_state = self.q_table.get(next_state_key, {})
             
-            if q_values_for_next_state: # If there are actions and Q-values for the next state
-                max_next_q_val = -float('inf')
-                for next_action_candidate in range(self.action_space.n):
-                    q_val = q_values_for_next_state.get(next_action_candidate, self.q_table_default_value)
-                    if q_val > max_next_q_val:
-                        max_next_q_val = q_val
-            # If q_values_for_next_state is empty (e.g., new state), max_next_q_val remains self.q_table_default_value (often 0)
-            # which is appropriate as there's no learned value yet.
+            # Find maximum Q-value for next state (guaranteed to exist after _ensure_q_state_exists)
+            max_next_q_val = -float('inf')
+            for next_action_candidate in range(self.action_space.n):
+                q_val = q_values_for_next_state.get(next_action_candidate, self.q_table_default_value)
+                if q_val > max_next_q_val:
+                    max_next_q_val = q_val
 
         # Q-learning update rule: Q(s,a) <- Q(s,a) + alpha * (r + gamma * max_a' Q(s',a') - Q(s,a))
         td_target = reward + self.gamma * max_next_q_val
@@ -413,7 +450,7 @@ class DynaQAgent(QLearningAgent): # Inherits from QLearningAgent
             self._set_q_value(s_key_sim, a_sim, new_q_sim)
 
     def onEpisodeEnd(self, episode_num=None, total_episodes=None):
-        super(QLearningAgent, self).onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) # Call AbstractAgent's onEpisodeEnd for epsilon
+        super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) # Call QLearningAgent's onEpisodeEnd for proper cleanup
 
         current_episode_display = episode_num + 1 if episode_num is not None else "N/A"
  

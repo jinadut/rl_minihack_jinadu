@@ -13,6 +13,7 @@ except ImportError:
     print("TkAgg backend not available, using default backend. Plots might not be interactive or might save to file.")
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 import numpy as np # For np.mean if needed for interim logging
 
 
@@ -82,7 +83,9 @@ def main():
         plt.legend()
         plt.grid(True)
         
-        output_dir = f"results/2.1_sarsa/{env_name}/"
+        # Save to Documents folder instead of read-only location
+        home_dir = str(Path.home())
+        output_dir = os.path.join(home_dir, "Documents", "rl_results", "2.1_sarsa", env_name)
         os.makedirs(output_dir, exist_ok=True)
         plot_filename = os.path.join(output_dir, f"average_returns_sarsa_{env_name}.png")
         plt.savefig(plot_filename)

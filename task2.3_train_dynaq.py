@@ -13,6 +13,7 @@ except ImportError:
     print("TkAgg backend not available, using default backend. Plots might not be interactive or might save to file.")
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 import numpy as np # For np.mean if needed for interim logging
 
 
@@ -80,9 +81,11 @@ def main():
         plt.legend()
         plt.grid(True)
         
-        output_dir = f"results/task_dynaq/{env_name}/" # Changed output directory
+        # Save to Documents folder instead of read-only location
+        home_dir = str(Path.home())
+        output_dir = os.path.join(home_dir, "Documents", "rl_results", "2.3_dynaq", env_name)
         os.makedirs(output_dir, exist_ok=True)
-        plot_filename = os.path.join(output_dir, f"average_returns_dynaq_{env_name}.png") # Changed plot filename
+        plot_filename = os.path.join(output_dir, f"average_returns_dynaq_{env_name}.png")
         plt.savefig(plot_filename)
         print(f"Average returns plot for {env_name} saved to {plot_filename}")
         

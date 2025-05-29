@@ -2,25 +2,25 @@
 
 # --- Shared parameters for all learning agents ---
 AGENT_BASE_PARAMS = {
-    "gamma": 0.98,              # Discount factor
+    "gamma": 0.995,              # Higher discount factor for better reward propagation
     "epsilon_start": 1.0,       # Initial exploration rate (also used as start for linear decay)
     "epsilon_min": 0.01,        # Minimum exploration rate
     "epsilon_decay_strategy": "linear", # Options: "linear", "multiplicative"
     "epsilon_decay_rate": 0.995, # Multiplicative decay factor (only used if strategy is "multiplicative")
-    "q_table_default_value": 0.0 # Default value for new Q-table entries
+    "q_table_default_value": 100.0 # Optimistic initialization - encourages exploration
 }
 
 # --- Parameters specific to Q-Learning Agent ---
 Q_LEARNING_AGENT_PARAMS = {
     **AGENT_BASE_PARAMS, # Inherit base parameters
-    "alpha": 0.2,              # Learning rate
+    "alpha": 0.15,              # Higher learning rate for faster updates
     "agent_id": "QLearningAgent"
 }
 
 # --- Parameters specific to SARSA (On-Policy TD) Agent ---
 SARSA_AGENT_PARAMS = {
     **AGENT_BASE_PARAMS, # Inherit base parameters
-    "alpha": 0.2,              # Learning rate
+    "alpha": 0.15,              # Higher learning rate for faster updates
     "agent_id": "SARSAAgent"
 }
 
@@ -34,7 +34,7 @@ MONTE_CARLO_AGENT_PARAMS = {
 # --- Parameters specific to Dyna-Q Agent ---
 DYNA_Q_AGENT_PARAMS = {
     **AGENT_BASE_PARAMS,  # Inherit base parameters
-    "alpha": 0.2,           # Learning rate for Q-learning updates (real and simulated)
+    "alpha": 0.15,           # Higher learning rate for faster updates
     "agent_id": "DynaQAgent",
     "planning_steps": 50    # Number of simulated experiences per real experience
 }
