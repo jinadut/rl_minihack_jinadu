@@ -1,0 +1,22 @@
+@echo off
+echo Setting up WSL2 and Ubuntu for NLE installation...
+echo.
+
+echo Step 1: Installing WSL2 and Ubuntu...
+wsl --install -d Ubuntu-22.04
+
+echo.
+echo ============================================================
+echo WSL2 and Ubuntu installation initiated!
+echo.
+echo NEXT STEPS:
+echo 1. Your computer will likely need to REBOOT
+echo 2. After reboot, Ubuntu will open automatically
+echo 3. Set up your Ubuntu username and password when prompted
+echo 4. Then run the setup_nle_ubuntu.sh script inside Ubuntu
+echo.
+echo If Ubuntu doesn't open automatically after reboot:
+echo - Search for "Ubuntu" in the Start menu and click it
+echo.
+echo ============================================================
+pause
