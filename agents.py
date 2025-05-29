@@ -91,14 +91,20 @@ class MonteCarloAgent(commons.AbstractAgent):
         self.returns_count = defaultdict(lambda: defaultdict(int))
 
     def _state_to_key(self, state_obs):
-        """Converts an observation to a hashable key for the Q-table.
-           Using 'chars' for MiniHack as a simple example. Might need to be more robust.
-        """
-        if isinstance(state_obs, dict) and 'chars' in state_obs:
-            return tuple(map(tuple, state_obs['chars']))
+        """Simple state representation using only agent position for manageable state space."""
+        if isinstance(state_obs, dict) and 'blstats' in state_obs:
+            # Use only the agent's x,y position as state
+            x_pos = state_obs['blstats'][0]
+            y_pos = state_obs['blstats'][1]
+            return (x_pos, y_pos)
         elif isinstance(state_obs, (np.ndarray, list, tuple)):
-            return tuple(state_obs)
-        return str(state_obs) # Fallback, less ideal
+            if isinstance(state_obs, np.ndarray):
+                return tuple(state_obs.flatten().tolist())
+            try:
+                return tuple(map(lambda x: tuple(x) if isinstance(x, np.ndarray) else x, state_obs))
+            except TypeError:
+                return str(state_obs) 
+        return str(state_obs)
 
     def act(self, state_obs):
         state_key = self._state_to_key(state_obs)
@@ -178,8 +184,11 @@ class SARSAAgent(commons.AbstractAgent):
         """Converts an observation to a hashable key for the Q-table.
            Identical to MonteCarloAgent's version for now.
         """
-        if isinstance(state_obs, dict) and 'chars' in state_obs:
-            return tuple(map(tuple, state_obs['chars']))
+        if isinstance(state_obs, dict) and 'blstats' in state_obs:
+            # Use only the agent's x,y position as state
+            x_pos = state_obs['blstats'][0]
+            y_pos = state_obs['blstats'][1]
+            return (x_pos, y_pos)
         elif isinstance(state_obs, (np.ndarray, list, tuple)):
             # Attempt to convert elements to a basic type if they are numpy types
             if isinstance(state_obs, np.ndarray):
@@ -230,8 +239,8 @@ class SARSAAgent(commons.AbstractAgent):
         current_q = self._get_q_value(state_key, action)
         
         # next_action_on_policy is a_prime for SARSA
-        # If done, the value of the next state Q(s',a') is 0 because the episode has ended.
-        if done:
+        # If done or truncated, the value of the next state Q(s',a') is 0 because the episode has ended.
+        if done or truncated:
             next_q_val_for_next_action = 0.0
         else:
             # Ensure the next state_key also has its Q-values initialized if it's new
@@ -248,7 +257,6 @@ class SARSAAgent(commons.AbstractAgent):
 
     def onEpisodeEnd(self, episode_num=None, total_episodes=None):
         super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) # Handle epsilon decay
-        # SARSA typically does not require extensive end-of-episode processing for its core learning,
 
         current_episode_display = episode_num + 1 if episode_num is not None else "N/A"
         last_q_display = f"{self.last_updated_q:.4f}" if self.last_updated_q is not None else "N/A"
@@ -266,11 +274,12 @@ class QLearningAgent(commons.AbstractAgent):
         self.last_updated_q = None # Initialize tracker for the last Q-value updated
 
     def _state_to_key(self, state_obs):
-        """Converts an observation to a hashable key for the Q-table.
-           Identical to SARSAAgent's version for now.
-        """
-        if isinstance(state_obs, dict) and 'chars' in state_obs:
-            return tuple(map(tuple, state_obs['chars']))
+        """Simple state representation using only agent position for manageable state space."""
+        if isinstance(state_obs, dict) and 'blstats' in state_obs:
+            # Use only the agent's x,y position as state
+            x_pos = state_obs['blstats'][0]
+            y_pos = state_obs['blstats'][1]
+            return (x_pos, y_pos)
         elif isinstance(state_obs, (np.ndarray, list, tuple)):
             if isinstance(state_obs, np.ndarray):
                 return tuple(state_obs.flatten().tolist())
@@ -318,7 +327,7 @@ class QLearningAgent(commons.AbstractAgent):
         current_q = self._get_q_value(state_key, action)
         
         max_next_q_val = self.q_table_default_value # Default if next state has no Q-values yet or is terminal
-        if not done:
+        if not (done or truncated):
             self._ensure_q_state_exists(next_state_key) # Ensure Q-values for next_state_key are initialized
             q_values_for_next_state = self.q_table.get(next_state_key, {})
             
@@ -339,7 +348,7 @@ class QLearningAgent(commons.AbstractAgent):
         self.last_updated_q = new_q
 
     def onEpisodeEnd(self, episode_num=None, total_episodes=None):
-        super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) 
+        super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) # Handle epsilon decay
 
         current_episode_display = episode_num + 1 if episode_num is not None else "N/A"
         last_q_display = f"{self.last_updated_q:.4f}" if self.last_updated_q is not None else "N/A"

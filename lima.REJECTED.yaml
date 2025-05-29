@@ -1,0 +1,40 @@
+# Lima configuration optimized for M4 Pro MacBook
+images:
+  - location: "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img"
+    arch: "x86_64"
+    digest: "sha256:5a3f1a6c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+
+# CPU and Memory allocation
+cpus: 8  # Increased from 4 to 8 for better performance
+memory: "12GiB"  # Increased from 4GB to 12GB
+disk: "100GiB"
+
+# Performance optimizations
+mounts:
+  - location: "~"
+    writable: true
+    mountType: "virtiofs"  # Using virtiofs for better performance
+  - location: "~/.cache"
+    writable: true
+    mountType: "virtiofs"
+
+# Network optimizations
+networks:
+  - lima: "shared"
+    interface: "en0"
+
+# Additional performance settings
+containerd:
+  system: true
+  user: true
+
+# Enable shared memory for better performance
+sharedMemory:
+  size: "4GiB"
+
+# Enable CPU features
+cpu:
+  type: "host"
+  features:
+    - "avx2"
+    - "sse4.2" 
