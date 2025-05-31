@@ -4,6 +4,12 @@ from gymnasium import Env
 import matplotlib.pyplot as plt
 import time # Added for time.sleep
 
+# Define BLSTATS_INDICES for coordinate extraction
+BLSTATS_INDICES = {'X': 0, 'Y': 1}
+
+# Import TRAINING_PARAMS for fallback in interact loop
+from config import TRAINING_PARAMS, UNIVERSAL_REWARD_PARAMS
+
 
 class AbstractAgent():
 
@@ -32,14 +38,18 @@ class AbstractAgent():
         self.q_table = {}
         self.q_table_default_value = self.params.get("q_table_default_value", 0.0)
 
-    def act(self, state_obs: Any) -> Any:
+    def act(self, state_obs: Any, blstats: Optional[np.ndarray] = None) -> Any:
         """
-        This function represents the actual decision-making process of the agent. Given a 'state' and, possibly, a 'reward'
-        the agent returns an action to take in that state.
-        :param state: the state on which to act
-        :param reward: the reward computed together with the state (i.e. the reward on the previous action). Useful for learning
-        :params
-        :return:
+        This function represents the actual decision-making process of the agent. Given a 'state' 
+        (which could be an observation dict) and possibly blstats, the agent returns an action.
+        Derived classes must implement this.
+
+        Args:
+            state_obs (Any): The observation from the environment.
+            blstats (Optional[np.ndarray]): The blstats array, for agents using coordinate-based states.
+
+        Returns:
+            Any: The action to take.
         """
         raise NotImplementedError()
 
@@ -69,11 +79,18 @@ class AbstractAgent():
 
         if self.epsilon_decay_strategy == "linear":
             if total_episodes is not None and total_episodes > 0 and episode_num is not None:
-                if episode_num % 100 == 0: # Print every 100 episodes to avoid too much spam
-                    print(f"[DEBUG Epsilon] Agent: {self.id}, Ep: {episode_num}, Received total_episodes: {total_episodes}, Epsilon_Start: {self.epsilon_start}, Epsilon_Min: {self.epsilon_min}")
+                # Calculate decay_amount and new_epsilon for every episode
                 decay_amount = (self.epsilon_start - self.epsilon_min) / total_episodes
-                new_epsilon = self.epsilon_start - (episode_num * decay_amount) # episode_num is 0-indexed for calculation
-                self.epsilon = max(self.epsilon_min, new_epsilon)
+                # episode_num is 0-indexed.
+                # Epsilon will be epsilon_start for actions taken in episode 0.
+                # It will decay linearly for subsequent episodes.
+                new_epsilon_val = self.epsilon_start - (episode_num * decay_amount)
+                self.epsilon = max(self.epsilon_min, new_epsilon_val)
+                
+                if episode_num % 100 == 0: # Print/log every 100 episodes to avoid too much spam
+                    # Example logging:
+                    # print(f"Episode {episode_num + 1}/{total_episodes}: Epsilon decayed to {self.epsilon:.4f}")
+                    pass # Placeholder for actual logging if desired
             # If total_episodes or episode_num is not provided, epsilon doesn't change for linear strategy
             # or one might add a warning/error, but for now, it just means no decay in that call.
         elif self.epsilon_decay_strategy == "multiplicative":
@@ -98,6 +115,51 @@ class AbstractAgent():
         """Ensures a state entry exists in the Q-table, typically with default values for all actions."""
         if state_key not in self.q_table:
             self.q_table[state_key] = {a: self.q_table_default_value for a in range(self.action_space.n)}
+
+
+def get_state_representation(obs_dict: Dict, blstats: Optional[np.ndarray], state_representation_type: str = "chars_hash") -> Any:
+    """
+    Generates a state representation based on the specified type.
+
+    Args:
+        obs_dict (dict): The observation dictionary from the environment, potentially containing 'chars'.
+        blstats (numpy.ndarray): The blstats array from the environment, containing agent coordinates.
+                                 Indices for x and y are defined by BLSTATS_INDICES.
+        state_representation_type (str): Type of state representation.
+                                         "coords" for (x,y) tuple.
+                                         "chars_hash" for hash of the 'chars' grid.
+
+    Returns:
+        A hashable state representation (tuple for coords, int for chars_hash).
+        Returns None if the required data for the chosen representation is missing or an error occurs.
+    """
+    if state_representation_type == "coords":
+        if blstats is not None and len(blstats) > max(BLSTATS_INDICES['X'], BLSTATS_INDICES['Y']):
+            try:
+                x = int(blstats[BLSTATS_INDICES['X']])
+                y = int(blstats[BLSTATS_INDICES['Y']])
+                return (x, y)  # Return a tuple, which is hashable
+            except (IndexError, ValueError) as e:
+                # print(f"[ERROR get_state_representation] Could not extract coordinates from blstats: {e}")
+                return None 
+        else:
+            # print(f"[WARNING get_state_representation] 'coords' type requested, but blstats missing or too short.")
+            return None
+    
+    elif state_representation_type == "chars_hash":
+        if "chars" in obs_dict and obs_dict["chars"] is not None:
+            try:
+                return hash(obs_dict["chars"].tobytes())
+            except AttributeError: # If obs_dict["chars"] is not a numpy array or doesn't have tobytes
+                # print(f"[ERROR get_state_representation] 'chars' object does not support tobytes(). Type: {type(obs_dict['chars'])}")
+                return None
+        else:
+            # print(f"[WARNING get_state_representation] 'chars_hash' type requested, but 'chars' missing from observation.")
+            return None
+    
+    else:
+        # print(f"[WARNING get_state_representation] Unknown state_representation_type: {state_representation_type}.")
+        return None
 
 
 class AbstractRLTask():
@@ -168,10 +230,7 @@ class AbstractRLTask():
             
             if do_visualize_this_episode:
                 print(f"--- Visualizing Training Episode {episode_num + 1}/{n_episodes} ---")
-                self.agent.learning = False # Optionally disable learning updates for pure viz episodes if desired
-                                          # Or keep it True to see learning in action.
-                                          # Let's keep it True to see learning in action by default.
-            
+                self.agent.learning = False             
             reset_val = self.env.reset()
             if isinstance(reset_val, tuple) and len(reset_val) == 2 and isinstance(reset_val[1], dict):
                 current_state_obs, info = reset_val
@@ -242,7 +301,7 @@ class AbstractRLTask():
             episode_steps_taken.append(steps_this_episode)
             self.agent.onEpisodeEnd(episode_num=episode_num, total_episodes=n_episodes)
 
-            if (episode_num + 1) % 100 == 0:
+            if (episode_num + 1) % 10 == 0:
                 avg_return_last_100 = np.mean(episode_total_returns[-100:])
                 avg_steps_last_100 = np.mean(episode_steps_taken[-100:])
                 print(f"Episode {episode_num + 1}/{n_episodes} completed. Steps: {steps_this_episode}. Avg Ret (last 100): {avg_return_last_100:.2f}. Avg Steps (last 100): {avg_steps_last_100:.2f}")

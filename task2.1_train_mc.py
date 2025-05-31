@@ -79,13 +79,23 @@ def main():
         plt.legend()
         plt.grid(True)
         
-        # Save to Documents folder instead of read-only location
-        home_dir = str(Path.home())
-        output_dir = os.path.join(home_dir, "Documents", "rl_results", "2.1_mc", env_name)
-        os.makedirs(output_dir, exist_ok=True)
-        plot_filename = os.path.join(output_dir, f"average_returns_mc_{env_name}.png")
+        # Define the path to your macOS home as it's mounted in the VM
+        mac_home_in_vm = "/Users/thiesjinadu"  # Path to macOS home inside the VM
+
+        # Construct the output directory path
+        agent_name_for_path = mc_agent.id.lower().replace("agent", "").replace("-","") # e.g., "mc"
+        if not agent_name_for_path: agent_name_for_path = "mc_default" # Fallback
+        
+        task_subfolder = f"2.1_{agent_name_for_path}" # e.g., "2.1_mc"
+
+        output_dir_base = os.path.join(mac_home_in_vm, "Documents", "rl_results")
+        output_dir_task_specific = os.path.join(output_dir_base, task_subfolder, env_name)
+
+        os.makedirs(output_dir_task_specific, exist_ok=True)
+        
+        plot_filename = os.path.join(output_dir_task_specific, f"average_returns_{agent_name_for_path}_{env_name}.png")
         plt.savefig(plot_filename)
-        print(f"Average returns plot for {env_name} saved to {plot_filename}")
+        print(f"Average returns plot for {env_name} saved to {plot_filename} (on macOS host)")
         
         try:
             plt.show(block=False)

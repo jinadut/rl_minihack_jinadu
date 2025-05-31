@@ -5,6 +5,8 @@ from collections import defaultdict
 
 # Import config parameters
 from config import MONTE_CARLO_AGENT_PARAMS, SARSA_AGENT_PARAMS, Q_LEARNING_AGENT_PARAMS, DYNA_Q_AGENT_PARAMS
+# --- DEBUG IMPORT ---
+from config import UNIVERSAL_REWARD_PARAMS # For debug print conditions
 
 class RandomAgent(commons.AbstractAgent):
     """
@@ -84,42 +86,31 @@ class FixedAgent(commons.AbstractAgent):
 # --- Monte Carlo Agent --- #
 class MonteCarloAgent(commons.AbstractAgent):
     def __init__(self, action_space, params=MONTE_CARLO_AGENT_PARAMS):
-        super().__init__(id=params.get("agent_id", "MonteCarloAgent"), action_space=action_space, params=params)
+        effective_params = params if params is not None else MONTE_CARLO_AGENT_PARAMS
+        super().__init__(id=effective_params.get("agent_id", "MonteCarloAgent"), action_space=action_space, params=effective_params)
         self.first_visit = self.params.get("first_visit", True)
         self.episode_history = []
         self.returns_sum = defaultdict(lambda: defaultdict(float))
         self.returns_count = defaultdict(lambda: defaultdict(int))
 
     def _state_to_key(self, state_obs):
-        """Enhanced state representation using position plus minimal context."""
-        if isinstance(state_obs, dict) and 'blstats' in state_obs:
-            # Agent position
-            x_pos = state_obs['blstats'][0] 
-            y_pos = state_obs['blstats'][1]
-            
-            # Add minimal context from immediate surroundings
-            context = []
-            if 'chars' in state_obs:
-                chars = state_obs['chars']
-                if len(chars.shape) >= 2:
-                    # Check immediate neighbors (4-connected)
-                    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # N, S, E, W
-                    for dx, dy in directions:
-                        new_x, new_y = x_pos + dx, y_pos + dy
-                        if 0 <= new_x < chars.shape[0] and 0 <= new_y < chars.shape[1]:
-                            context.append(chars[new_x, new_y])
-                        else:
-                            context.append(-1)  # Out of bounds marker
-            
-            return (x_pos, y_pos, tuple(context))
-        elif isinstance(state_obs, (np.ndarray, list, tuple)):
-            if isinstance(state_obs, np.ndarray):
-                return tuple(state_obs.flatten().tolist())
-            try:
-                return tuple(map(lambda x: tuple(x) if isinstance(x, np.ndarray) else x, state_obs))
-            except TypeError:
-                return str(state_obs) 
-        return str(state_obs)
+        """
+        Use chars array to find agent position. Pure positional state - no goal info.
+        Fallback to blstats needed for death states where '@' disappears.
+        """
+        chars = state_obs['chars']
+        
+        # Find agent position in chars array
+        agent_positions = np.where(chars == ord('@'))
+        
+        if len(agent_positions[0]) > 0:
+            # Normal case: agent exists in chars
+            agent_x = int(agent_positions[0][0])
+            agent_y = int(agent_positions[1][0])
+            return (agent_x, agent_y)
+        else:
+            # Death state: agent '@' has disappeared, use last known position from blstats
+            return (int(state_obs['blstats'][0]), int(state_obs['blstats'][1]))
 
     def act(self, state_obs):
         state_key = self._state_to_key(state_obs)
@@ -190,41 +181,29 @@ class MonteCarloAgent(commons.AbstractAgent):
 # --- SARSA Agent --- #
 class SARSAAgent(commons.AbstractAgent):
     def __init__(self, action_space, params=SARSA_AGENT_PARAMS):
-        super().__init__(id=params.get("agent_id", "SARSAAgent"), action_space=action_space, params=params)
+        effective_params = params if params is not None else SARSA_AGENT_PARAMS
+        super().__init__(id=effective_params.get("agent_id", "SARSAAgent"), action_space=action_space, params=effective_params)
         self.alpha = self.params.get("alpha", 0.1) # Learning rate
         self.step_count = 0
         self.last_updated_q = None # Initialize tracker for the last Q-value updated
 
     def _state_to_key(self, state_obs):
-        """Enhanced state representation using position plus minimal context."""
-        if isinstance(state_obs, dict) and 'blstats' in state_obs:
-            # Agent position
-            x_pos = state_obs['blstats'][0] 
-            y_pos = state_obs['blstats'][1]
-            
-            # Add minimal context from immediate surroundings
-            context = []
-            if 'chars' in state_obs:
-                chars = state_obs['chars']
-                if len(chars.shape) >= 2:
-                    # Check immediate neighbors (4-connected)
-                    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # N, S, E, W
-                    for dx, dy in directions:
-                        new_x, new_y = x_pos + dx, y_pos + dy
-                        if 0 <= new_x < chars.shape[0] and 0 <= new_y < chars.shape[1]:
-                            context.append(chars[new_x, new_y])
-                        else:
-                            context.append(-1)  # Out of bounds marker
-            
-            return (x_pos, y_pos, tuple(context))
-        elif isinstance(state_obs, (np.ndarray, list, tuple)):
-            if isinstance(state_obs, np.ndarray):
-                return tuple(state_obs.flatten().tolist())
-            try:
-                return tuple(map(lambda x: tuple(x) if isinstance(x, np.ndarray) else x, state_obs))
-            except TypeError:
-                return str(state_obs)
-        return str(state_obs)
+        """
+        Use chars array to find agent position. Pure positional state - no goal info.
+        """
+        chars = state_obs['chars']
+        
+        # Find agent position in chars array
+        agent_positions = np.where(chars == ord('@'))
+        
+        if len(agent_positions[0]) > 0:
+            # Normal case: agent exists in chars
+            agent_x = int(agent_positions[0][0])
+            agent_y = int(agent_positions[1][0])
+            return (agent_x, agent_y)
+        else:
+            # Death state: agent '@' has disappeared, use last known position from blstats
+            return (int(state_obs['blstats'][0]), int(state_obs['blstats'][1]))
 
     def act(self, state_obs):
         state_key = self._state_to_key(state_obs)
@@ -293,41 +272,35 @@ class SARSAAgent(commons.AbstractAgent):
 # --- Q-Learning Agent --- #
 class QLearningAgent(commons.AbstractAgent):
     def __init__(self, action_space, params=Q_LEARNING_AGENT_PARAMS):
-        super().__init__(id=params.get("agent_id", "QLearningAgent"), action_space=action_space, params=params)
+        effective_params = params if params is not None else Q_LEARNING_AGENT_PARAMS
+        super().__init__(id=effective_params.get("agent_id", "QLearningAgent"), action_space=action_space, params=effective_params)
         self.alpha = self.params.get("alpha", 0.1) # Learning rate
         self.step_count = 0
         self.last_updated_q = None # Initialize tracker for the last Q-value updated
+        # --- DEBUG ---
+        # Assuming a 5x5 empty room, typical start state is (1,1) after MiniHack's padding.
+        # Adjust if your specific "empty_room" variant has a different guaranteed start.
+        self.DEBUG_START_STATE = (1,1) 
+        self.GOAL_REWARD_VALUE = UNIVERSAL_REWARD_PARAMS.get("goal_reward", 5000) # Get goal reward for debug condition
 
     def _state_to_key(self, state_obs):
-        """Enhanced state representation using position plus minimal context."""
-        if isinstance(state_obs, dict) and 'blstats' in state_obs:
-            # Agent position
-            x_pos = state_obs['blstats'][0] 
-            y_pos = state_obs['blstats'][1]
-            
-            # Add minimal context from immediate surroundings
-            context = []
-            if 'chars' in state_obs:
-                chars = state_obs['chars']
-                if len(chars.shape) >= 2:
-                    # Check immediate neighbors (4-connected)
-                    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # N, S, E, W
-                    for dx, dy in directions:
-                        new_x, new_y = x_pos + dx, y_pos + dy
-                        if 0 <= new_x < chars.shape[0] and 0 <= new_y < chars.shape[1]:
-                            context.append(chars[new_x, new_y])
-                        else:
-                            context.append(-1)  # Out of bounds marker
-            
-            return (x_pos, y_pos, tuple(context))
-        elif isinstance(state_obs, (np.ndarray, list, tuple)):
-            if isinstance(state_obs, np.ndarray):
-                return tuple(state_obs.flatten().tolist())
-            try:
-                return tuple(map(lambda x: tuple(x) if isinstance(x, np.ndarray) else x, state_obs))
-            except TypeError:
-                return str(state_obs) 
-        return str(state_obs)
+        """
+        Use chars array to find agent position. Pure positional state - no goal info.
+        Fallback to blstats needed for death states where '@' disappears.
+        """
+        chars = state_obs['chars']
+        
+        # Find agent position in chars array
+        agent_positions = np.where(chars == ord('@'))
+        
+        if len(agent_positions[0]) > 0:
+            # Normal case: agent exists in chars
+            agent_x = int(agent_positions[0][0])
+            agent_y = int(agent_positions[1][0])
+            return (agent_x, agent_y)
+        else:
+            # Death state: agent '@' has disappeared, use last known position from blstats
+            return (int(state_obs['blstats'][0]), int(state_obs['blstats'][1]))
 
     def act(self, state_obs):
         state_key = self._state_to_key(state_obs)
@@ -336,15 +309,15 @@ class QLearningAgent(commons.AbstractAgent):
         self.step_count += 1
 
         if random.random() < self.epsilon:
-            return self.action_space.sample()  # Explore
+            action = self.action_space.sample()
+            return action
         else:
             # Exploit: choose action with max Q-value for current state
-            q_values_for_state = self.q_table.get(state_key, {})
-            if not q_values_for_state:
-                return self.action_space.sample()
+            q_values_for_state = self.q_table.get(state_key, {}) # Already ensures state_key exists
             
             max_q = -float('inf')
             best_actions = []
+            # Iterate through all possible actions in the action space
             for action_idx in range(self.action_space.n):
                 q_val = q_values_for_state.get(action_idx, self.q_table_default_value)
                 if q_val > max_q:
@@ -352,9 +325,13 @@ class QLearningAgent(commons.AbstractAgent):
                     best_actions = [action_idx]
                 elif q_val == max_q:
                     best_actions.append(action_idx)
-            if not best_actions: # Fallback if all Q-values are -inf or state not found (should be rare)
-                return self.action_space.sample()
-            return random.choice(best_actions)
+            
+            if not best_actions: # Fallback if all Q-values are -inf or state not found
+                chosen_action = self.action_space.sample()
+
+            else:
+                chosen_action = random.choice(best_actions)
+            return chosen_action
 
     def learn(self, state, action, reward, next_state, next_action_on_policy, done, truncated):
         if not self.learning:
@@ -365,31 +342,39 @@ class QLearningAgent(commons.AbstractAgent):
         
         current_q = self._get_q_value(state_key, action)
         
-        max_next_q_val = self.q_table_default_value # Default if next state has no Q-values yet or is terminal
-        if not (done or truncated):
-            self._ensure_q_state_exists(next_state_key) # Ensure Q-values for next_state_key are initialized
+        # Determine the value of max Q(s',a') for the next state s'
+        actual_max_next_q_val: float
+        if done or truncated:
+            actual_max_next_q_val = 0.0  # For terminal states, future rewards are 0
+        else:
+            self._ensure_q_state_exists(next_state_key) 
             q_values_for_next_state = self.q_table.get(next_state_key, {})
             
-            # Find maximum Q-value for next state (guaranteed to exist after _ensure_q_state_exists)
-            max_next_q_val = -float('inf')
-            for next_action_candidate in range(self.action_space.n):
-                q_val = q_values_for_next_state.get(next_action_candidate, self.q_table_default_value)
-                if q_val > max_next_q_val:
-                    max_next_q_val = q_val
-
+            if not q_values_for_next_state: # Should be rare if _ensure_q_state_exists populates all actions
+                actual_max_next_q_val = self.q_table_default_value # Fallback to default for new/empty next states
+            else:
+                actual_max_next_q_val = -float('inf') # Start with negative infinity to find the true max
+                for next_action_candidate in range(self.action_space.n): # Iterate over all possible actions
+                    q_val = q_values_for_next_state.get(next_action_candidate, self.q_table_default_value)
+                    if q_val > actual_max_next_q_val:
+                        actual_max_next_q_val = q_val
+            
         # Q-learning update rule: Q(s,a) <- Q(s,a) + alpha * (r + gamma * max_a' Q(s',a') - Q(s,a))
-        td_target = reward + self.gamma * max_next_q_val
-        new_q = current_q + self.alpha * (td_target - current_q)
+        td_target = reward + self.gamma * actual_max_next_q_val
+        # td_error = td_target - current_q # This is the TD error itself
+        new_q = current_q + self.alpha * (td_target - current_q) # Applying the TD error
         
         self._set_q_value(state_key, action, new_q)
         self.last_updated_q = new_q
+
 
     def onEpisodeEnd(self, episode_num=None, total_episodes=None):
         super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) # Handle epsilon decay
 
         current_episode_display = episode_num + 1 if episode_num is not None else "N/A"
         last_q_display = f"{self.last_updated_q:.4f}" if self.last_updated_q is not None else "N/A"
-    
+        print(f"Q-Value of last episode is: {last_q_display}")
+
         self.step_count = 0 
         self.last_updated_q = None
         pass
@@ -397,9 +382,13 @@ class QLearningAgent(commons.AbstractAgent):
 # --- Dyna-Q Agent --- #
 class DynaQAgent(QLearningAgent): # Inherits from QLearningAgent
     def __init__(self, action_space, params=DYNA_Q_AGENT_PARAMS):
-        super().__init__(action_space, params) # Call QLearningAgent's init
-        self.id = params.get("agent_id", "DynaQAgent")
-        self.planning_steps = params.get("planning_steps", 10)  # Number of model learning steps per real step
+        effective_params = params if params is not None else DYNA_Q_AGENT_PARAMS
+        # Call QLearningAgent's (super) init.
+        # QLearningAgent's __init__ will handle its own `params` assignment correctly with this change.
+        # We pass `effective_params` here, which QLearningAgent will then use.
+        super().__init__(action_space, params=effective_params)
+        self.id = effective_params.get("agent_id", "DynaQAgent") # explicit_id can be set if needed by DynaQ
+        self.planning_steps = self.params.get("planning_steps", 10)  # Uses self.params set by super()
         self.model = {}  # Stores (state, action) -> (reward, next_state, done_sim)
         # We need to store 'done_sim' in the model because the Q-learning update for simulated steps
         # needs to know if the simulated next_state is terminal according to the model.
@@ -450,13 +439,5 @@ class DynaQAgent(QLearningAgent): # Inherits from QLearningAgent
             self._set_q_value(s_key_sim, a_sim, new_q_sim)
 
     def onEpisodeEnd(self, episode_num=None, total_episodes=None):
-        super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) # Call QLearningAgent's onEpisodeEnd for proper cleanup
-
         current_episode_display = episode_num + 1 if episode_num is not None else "N/A"
- 
-        print(f"Dyna-Q - Episode: {current_episode_display}, Real Steps: {self.step_count}, Epsilon: {self.epsilon:.4f}")
-        
-        self.step_count = 0 # Reset real step count for the next episode (from QLearningAgent)
-        # self.last_updated_q is not managed here for Dyna-Q in the same way.
-        pass
-
+        super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes)

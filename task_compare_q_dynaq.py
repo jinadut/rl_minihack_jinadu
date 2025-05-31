@@ -95,7 +95,8 @@ def main():
         plt.legend()
         plt.grid(True)
         
-        output_dir = f"results/compare_q_dynaq/"
+        output_dir = "results/compare_q_dynaq/" # Relative path, will be inside the project dir
+        # If running in VM, and project dir is a mount from macOS, this needs to be writable.
         os.makedirs(output_dir, exist_ok=True)
         plot_filename = os.path.join(output_dir, f"comparison_{env_name}.png")
         plt.savefig(plot_filename)

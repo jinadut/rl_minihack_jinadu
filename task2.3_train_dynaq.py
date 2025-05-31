@@ -81,13 +81,23 @@ def main():
         plt.legend()
         plt.grid(True)
         
-        # Save to Documents folder instead of read-only location
-        home_dir = str(Path.home())
-        output_dir = os.path.join(home_dir, "Documents", "rl_results", "2.3_dynaq", env_name)
-        os.makedirs(output_dir, exist_ok=True)
-        plot_filename = os.path.join(output_dir, f"average_returns_dynaq_{env_name}.png")
+        # Define the path to your macOS home as it's mounted in the VM
+        mac_home_in_vm = "/Users/thiesjinadu"  # Path to macOS home inside the VM
+
+        # Construct the output directory path
+        agent_name_for_path = dyna_q_agent.id.lower().replace("agent", "").replace("-","") # e.g., "dynaq"
+        if not agent_name_for_path: agent_name_for_path = "dynaq_default" # Fallback
+        
+        task_subfolder = f"2.3_{agent_name_for_path}" # e.g., "2.3_dynaq"
+
+        output_dir_base = os.path.join(mac_home_in_vm, "Documents", "rl_results")
+        output_dir_task_specific = os.path.join(output_dir_base, task_subfolder, env_name)
+
+        os.makedirs(output_dir_task_specific, exist_ok=True)
+        
+        plot_filename = os.path.join(output_dir_task_specific, f"average_returns_{agent_name_for_path}_{env_name}.png")
         plt.savefig(plot_filename)
-        print(f"Average returns plot for {env_name} saved to {plot_filename}")
+        print(f"Average returns plot for {env_name} saved to {plot_filename} (on macOS host)")
         
         try:
             plt.show(block=False)

@@ -1,3 +1,4 @@
+import random
 from minihack.envs.room import MiniHackRoom
 import gymnasium as gym
 import minihack
@@ -80,6 +81,7 @@ class DoNotResetWhenDead(gym.Wrapper):
         self.goal_reward = goal_reward
         self.negative_step_reward = negative_step_reward
         self.dead_negative_reward = dead_negative_reward
+        self.random = random
 
     def step(self, action, **kwargs):
         # We override the done
@@ -134,7 +136,7 @@ def get_minihack_envirnment(id, **kwargs):
 
     if id == EMPTY_ROOM:
         env = MiniHackRoom(size = size,
-                           max_episode_steps=50,
+                           max_episode_steps=max_episode_steps,
                            actions=ACTIONS,
                            random = random,
                            observation_keys=obs,

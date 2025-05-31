@@ -4,10 +4,9 @@ import minihack_env as me
 import os
 from pathlib import Path
 
-# Create models directory in home directory
-home_dir = str(Path.home())
-models_dir = os.path.join(home_dir, "rl_minihack_models")
-os.makedirs(models_dir, exist_ok=True)
+# Define the target models directory on the macOS host
+mac_host_models_dir = "/Users/thiesjinadu/rl_minihack_models"
+os.makedirs(mac_host_models_dir, exist_ok=True)
 
 # Create environments
 environments = {
@@ -18,7 +17,7 @@ environments = {
 # Train and visualize for each environment
 for env_name, env_id in environments.items():
     print(f"\nTraining on {env_name}")
-    
+
     # Create environment
     env = me.get_minihack_envirnment(env_id, add_pixel=False, size=5)
     
@@ -26,11 +25,11 @@ for env_name, env_id in environments.items():
     model = PPO("MultiInputPolicy", env, verbose=1)
     model.learn(total_timesteps=10000, log_interval=4)
     
-    # Save model in home directory
-    model_path = os.path.join(models_dir, f"ppo_{env_name.lower()}")
+    # Save model to the macOS host directory
+    model_path = os.path.join(mac_host_models_dir, f"ppo_{env_name.lower()}")
     model.save(model_path)
-    print(f"Model saved to {model_path}")
-    
+    print(f"Model saved to {model_path} (on macOS host)")
+
     # Load model and visualize
     model = PPO.load(model_path)
     
