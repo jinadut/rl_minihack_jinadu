@@ -43,7 +43,7 @@ def main():
         max_steps_visualize_post = config.TRAINING_PARAMS.get("max_steps_visualize", 1000)
 
         # --- Environment Setup ---
-        obs_keys = ['chars', 'blstats', 'pixel'] 
+        obs_keys = ['chars', 'pixel'] 
         env = me.get_minihack_envirnment(
             env_id_val,
             observation_keys=obs_keys,

@@ -37,16 +37,16 @@ class AbstractAgent():
         self.gamma = self.params.get("gamma", 0.99)
         self.q_table = {}
         self.q_table_default_value = self.params.get("q_table_default_value", 0.0)
+        self.state_representation_type = self.params.get("state_representation_type", "agent_pos_from_chars") # Default to agent_pos_from_chars
 
-    def act(self, state_obs: Any, blstats: Optional[np.ndarray] = None) -> Any:
+    def act(self, state_obs: Any) -> Any:
         """
         This function represents the actual decision-making process of the agent. Given a 'state' 
-        (which could be an observation dict) and possibly blstats, the agent returns an action.
+        (which could be an observation dict), the agent returns an action.
         Derived classes must implement this.
 
         Args:
-            state_obs (Any): The observation from the environment.
-            blstats (Optional[np.ndarray]): The blstats array, for agents using coordinate-based states.
+            state_obs (Any): The observation from the environment (expected to be a dictionary).
 
         Returns:
             Any: The action to take.
@@ -117,16 +117,18 @@ class AbstractAgent():
             self.q_table[state_key] = {a: self.q_table_default_value for a in range(self.action_space.n)}
 
 
-def get_state_representation(obs_dict: Dict, blstats: Optional[np.ndarray], state_representation_type: str = "chars_hash") -> Any:
+def get_state_representation(obs_dict: Dict, state_representation_type: str = "coords") -> Any:
     """
     Generates a state representation based on the specified type.
+    Now defaults to "coords" and expects blstats to be in obs_dict.
 
     Args:
-        obs_dict (dict): The observation dictionary from the environment, potentially containing 'chars'.
-        blstats (numpy.ndarray): The blstats array from the environment, containing agent coordinates.
-                                 Indices for x and y are defined by BLSTATS_INDICES.
+        obs_dict (dict): The observation dictionary from the environment, 
+                         expected to contain 'blstats' if type is 'coords' 
+                         and 'chars' if type is 'chars_hash'.
         state_representation_type (str): Type of state representation.
-                                         "coords" for (x,y) tuple.
+                                         "coords" for (x,y) tuple from obs_dict['blstats'].
+                                         "agent_pos_from_chars" for finding '@' in obs_dict['chars'].
                                          "chars_hash" for hash of the 'chars' grid.
 
     Returns:
@@ -134,16 +136,41 @@ def get_state_representation(obs_dict: Dict, blstats: Optional[np.ndarray], stat
         Returns None if the required data for the chosen representation is missing or an error occurs.
     """
     if state_representation_type == "coords":
-        if blstats is not None and len(blstats) > max(BLSTATS_INDICES['X'], BLSTATS_INDICES['Y']):
-            try:
-                x = int(blstats[BLSTATS_INDICES['X']])
-                y = int(blstats[BLSTATS_INDICES['Y']])
-                return (x, y)  # Return a tuple, which is hashable
-            except (IndexError, ValueError) as e:
-                # print(f"[ERROR get_state_representation] Could not extract coordinates from blstats: {e}")
-                return None 
+        if "blstats" in obs_dict and obs_dict["blstats"] is not None: 
+            blstats = obs_dict["blstats"]
+            if len(blstats) > max(BLSTATS_INDICES['X'], BLSTATS_INDICES['Y']):
+                try:
+                    x = int(blstats[BLSTATS_INDICES['X']])
+                    y = int(blstats[BLSTATS_INDICES['Y']])
+                    return (x, y)  # Return a tuple, which is hashable
+                except (IndexError, ValueError) as e:
+                    # print(f"[ERROR get_state_representation] Could not extract coordinates from blstats: {e}")
+                    return None 
+            else:
+                # print(f"[WARNING get_state_representation] 'coords' type requested, but blstats in obs_dict too short.")
+                return None
         else:
-            # print(f"[WARNING get_state_representation] 'coords' type requested, but blstats missing or too short.")
+            # print(f"[WARNING get_state_representation] 'coords' type requested, but 'blstats' missing from obs_dict.")
+            return None
+    
+    elif state_representation_type == "agent_pos_from_chars":
+        if "chars" in obs_dict and obs_dict["chars"] is not None:
+            chars_grid = obs_dict["chars"]
+            agent_char_code = ord('@') # Get ASCII value of '@'
+            agent_positions = np.where(chars_grid == agent_char_code)
+            
+            if len(agent_positions[0]) > 0:
+                # Found the agent. Return (row, col) which is (y, x)
+                # Taking the first occurrence if multiple (shouldn't happen for agent)
+                y_coord = int(agent_positions[0][0])
+                x_coord = int(agent_positions[1][0])
+                return (x_coord, y_coord) # Return as (x, y) to be consistent with typical coordinate systems
+            else:
+                # Agent character '@' not found in chars grid (e.g., agent died)
+                # print(f"[WARNING get_state_representation] 'agent_pos_from_chars' requested, but '@' not found in chars.")
+                return None # Or a special state like (-1, -1) to indicate off-screen/dead
+        else:
+            # print(f"[WARNING get_state_representation] 'agent_pos_from_chars' requested, but 'chars' missing from obs_dict.")
             return None
     
     elif state_representation_type == "chars_hash":
@@ -232,6 +259,7 @@ class AbstractRLTask():
                 print(f"--- Visualizing Training Episode {episode_num + 1}/{n_episodes} ---")
                 self.agent.learning = False             
             reset_val = self.env.reset()
+            
             if isinstance(reset_val, tuple) and len(reset_val) == 2 and isinstance(reset_val[1], dict):
                 current_state_obs, info = reset_val
             else:
@@ -263,7 +291,10 @@ class AbstractRLTask():
                 current_episode_return += reward
                 
                 next_action_on_policy = self.agent.act(next_state_obs)
-                
+
+                if reward > 0:
+                    print(f"Found reward of: {reward} found on episode {episode_num+1}, step {steps_this_episode}") 
+
                 # Perform learning step, even if visualizing (unless learning explicitly disabled for viz)
                 self.agent.learn(
                     current_state_obs, current_action, reward, next_state_obs, 
@@ -430,26 +461,26 @@ import gymnasium as gym
 from gymnasium.core import ObservationWrapper
 from gymnasium import spaces
 
-class PixelObservationWrapper(ObservationWrapper):
-    """Wrapper to extract pixel observations from MiniHack's Dict observation space."""
+class DoNotResetWhenDead(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        # The observation space is now just the pixel part
-        self.observation_space = env.observation_space.spaces['pixel']
-        # Ensure the observation space is Box and has 3 dimensions (H, W, C)
-        # MiniHack 'pixel' is typically (H, W, C) with C=3 (RGB)
-        # If it's not, you might need to reshape or transpose.
-        # For SB3 CnnPolicy, it expects (C, H, W) by default if data_format='channels_first'
-        # or (H, W, C) if data_format='channels_last'. SB3 handles this internally if input is (H,W,C)
-        if not isinstance(self.observation_space, spaces.Box):
-            raise ValueError(
-                f"Expected Box space for pixel observations, got {type(self.observation_space)}"
-            )
-        if len(self.observation_space.shape) != 3:
-            raise ValueError(
-                f"Expected 3D shape for pixel (H, W, C), got {self.observation_space.shape}"
-            )
+        self.episode_over = False
+        self.current_steps = 0
 
-    def observation(self, observation):
-        """Extracts the pixel observation."""
-        return observation['pixel']
+    def step(self, action):
+        if self.episode_over:
+            # This should ideally not be called if episode_over is true,
+            # but as a safeguard, return a neutral state.
+            # The environment should have been reset by the agent's training loop.
+            obs, info = self.env.reset() # Reset to get a valid observation
+            return obs, 0, True, True, info # obs, reward, terminated, truncated, info
+
+        obs, reward, terminated, truncated, info = self.env.step(action)
+                    
+        self.current_steps += 1
+        return obs, reward, terminated, truncated, info
+
+    def reset(self, **kwargs): # Ensure current_steps is reset
+        self.current_steps = 0
+        self.episode_over = False # Make sure this is reset too
+        return self.env.reset(**kwargs)

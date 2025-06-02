@@ -71,7 +71,7 @@ MONSTER: ('Z', "ghoul"), (2,4)
 class DoNotResetWhenDead(gym.Wrapper):
 
     def __init__(self, env, 
-                 max_episode_steps = 1000, 
+                 max_episode_steps = 5000, 
                  goal_reward = UNIVERSAL_REWARD_PARAMS["goal_reward"], 
                  negative_step_reward = UNIVERSAL_REWARD_PARAMS["step_penalty"], 
                  dead_negative_reward = UNIVERSAL_REWARD_PARAMS["death_penalty"]):
@@ -120,7 +120,7 @@ def get_minihack_envirnment(id, **kwargs):
     size = kwargs.get("size", 5)
     random = kwargs.get("random", False)
     add_pixels = kwargs.get("add_pixel", False)
-    max_episode_steps = kwargs.get("max_episode_steps", 1000)
+    max_episode_steps = kwargs.get("max_episode_steps", 5000)
 
     # Fetch universal reward params
     goal_reward = UNIVERSAL_REWARD_PARAMS["goal_reward"]
@@ -164,8 +164,8 @@ def get_minihack_envirnment(id, **kwargs):
         except Exception as e:
             print(f"[get_minihack_environment] WARNING: ROOM_WITH_LAVA: Could not set _max_episode_steps on unwrapped env: {e}")
         env = DoNotResetWhenDead(env, max_episode_steps, 
-                                 goal_reward=goal_reward,
-                                 negative_step_reward=step_penalty,
+                                 goal_reward=goal_reward, 
+                                 negative_step_reward=step_penalty, 
                                  dead_negative_reward=death_penalty)
     elif id == CLIFF:
         des_file = des_cliff
@@ -186,9 +186,9 @@ def get_minihack_envirnment(id, **kwargs):
                 nle_env._max_episode_steps = max_episode_steps
         except Exception as e:
             print(f"[get_minihack_environment] WARNING: CLIFF: Could not set _max_episode_steps on unwrapped env: {e}")
-        env = DoNotResetWhenDead(env, max_episode_steps,
-                                 goal_reward=goal_reward,
-                                 negative_step_reward=step_penalty,
+        env = DoNotResetWhenDead(env, max_episode_steps, 
+                                 goal_reward=goal_reward, 
+                                 negative_step_reward=step_penalty, 
                                  dead_negative_reward=death_penalty)
     elif id == ROOM_WITH_MONSTER:
         des_file = des_monster
@@ -209,14 +209,14 @@ def get_minihack_envirnment(id, **kwargs):
                 nle_env._max_episode_steps = max_episode_steps
         except Exception as e:
             print(f"[get_minihack_environment] WARNING: ROOM_WITH_MONSTER: Could not set _max_episode_steps on unwrapped env: {e}")
-        env = DoNotResetWhenDead(env, max_episode_steps,
-                                 goal_reward=goal_reward,
-                                 negative_step_reward=step_penalty,
+        env = DoNotResetWhenDead(env, max_episode_steps, 
+                                 goal_reward=goal_reward, 
+                                 negative_step_reward=step_penalty, 
                                  dead_negative_reward=death_penalty)
     elif id == ROOM_WITH_MULTIPLE_MONSTERS:
         size = 7
         env = MiniHackRoom(size=size,
-                           max_episode_steps=100,
+                           max_episode_steps=max_episode_steps,
                            actions=ACTIONS,
                            random=random,
                            n_monster=3,

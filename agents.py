@@ -20,12 +20,11 @@ class RandomAgent(commons.AbstractAgent):
         """
         super().__init__(id="RandomAgent", action_space=action_space, params=params)
     
-    def act(self, state, reward=0):
+    def act(self, state_obs):
         """
         Selects a random action from the action space.
 
-        :param state: The current state of the environment (unused by this random agent).
-        :param reward: The reward from the previous action (unused by this random agent).
+        :param state_obs: The current state observation from the environment (unused by this random agent).
         :return: A randomly selected action.
         """
         return self.action_space.sample()
@@ -47,28 +46,16 @@ class FixedAgent(commons.AbstractAgent):
         super().__init__(id="FixedAgent", action_space=action_space, params=params)
         self.ACTION_SOUTH = 2
         self.ACTION_EAST = 1
-        self.trying_to_move_down = True
-        self.previous_y_coord = None # Stores the y-coordinate from the *previous* observation
-                                     # to detect if a "South" move was successful.
+        self.action_sequence = [self.ACTION_SOUTH] * 5 + [self.ACTION_EAST] * 5 # Example: try South 5 times, then East 5 times
+        self.current_action_index = 0
 
-    def act(self, observation, reward=0):
-        current_y_coord = observation['blstats'][1] # y-coordinate is at index 1 of blstats
-
-        action_to_take = None
-
-        if self.trying_to_move_down:
-            if self.previous_y_coord is not None and current_y_coord == self.previous_y_coord:
-                self.trying_to_move_down = False
-
-            self.previous_y_coord = current_y_coord
-
-            if self.trying_to_move_down: # Check again, as it might have been set to False above
-                action_to_take = self.ACTION_SOUTH
-            else: # Switched to East in this very step
-                action_to_take = self.ACTION_EAST
-        else: # Already in the "move East" phase
-            action_to_take = self.ACTION_EAST
-            # No need to update previous_y_coord if we are only moving east.
+    def act(self, state_obs):
+        if self.current_action_index < len(self.action_sequence):
+            action_to_take = self.action_sequence[self.current_action_index]
+            self.current_action_index += 1
+        else:
+            # Default action if sequence is exhausted (e.g., stay put or random)
+            action_to_take = self.action_space.sample() # Or a specific action like "no-op" if available
             
         return action_to_take
 
@@ -79,8 +66,7 @@ class FixedAgent(commons.AbstractAgent):
         """
         Reset agent's internal state for the next episode.
         """
-        self.trying_to_move_down = True
-        self.previous_y_coord = None
+        self.current_action_index = 0 # Reset action sequence for FixedAgent
         super().onEpisodeEnd(episode_num=episode_num, total_episodes=total_episodes) # For epsilon decay if ever used
 
 # --- Monte Carlo Agent --- #
@@ -93,27 +79,12 @@ class MonteCarloAgent(commons.AbstractAgent):
         self.returns_sum = defaultdict(lambda: defaultdict(float))
         self.returns_count = defaultdict(lambda: defaultdict(int))
 
-    def _state_to_key(self, state_obs):
-        """
-        Use chars array to find agent position. Pure positional state - no goal info.
-        Fallback to blstats needed for death states where '@' disappears.
-        """
-        chars = state_obs['chars']
-        
-        # Find agent position in chars array
-        agent_positions = np.where(chars == ord('@'))
-        
-        if len(agent_positions[0]) > 0:
-            # Normal case: agent exists in chars
-            agent_x = int(agent_positions[0][0])
-            agent_y = int(agent_positions[1][0])
-            return (agent_x, agent_y)
-        else:
-            # Death state: agent '@' has disappeared, use last known position from blstats
-            return (int(state_obs['blstats'][0]), int(state_obs['blstats'][1]))
-
     def act(self, state_obs):
-        state_key = self._state_to_key(state_obs)
+        # Assuming self.state_representation_type is set to 'coords' or similar
+        state_key = commons.get_state_representation(state_obs, self.state_representation_type)
+        if state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key from state_obs: {state_obs}. Taking random action.")
+            return self.action_space.sample()
         self._ensure_q_state_exists(state_key)
 
         if random.random() < self.epsilon:
@@ -141,7 +112,11 @@ class MonteCarloAgent(commons.AbstractAgent):
         """
         if not self.learning:
             return
-        state_key = self._state_to_key(state)
+        # Assuming self.state_representation_type is set to 'coords' or similar
+        state_key = commons.get_state_representation(state, self.state_representation_type)
+        if state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key during learn (state): {state}. Skipping learn step.")
+            return
         self.episode_history.append((state_key, action, reward))
 
     def onEpisodeEnd(self, episode_num=None, total_episodes=None):
@@ -187,26 +162,12 @@ class SARSAAgent(commons.AbstractAgent):
         self.step_count = 0
         self.last_updated_q = None # Initialize tracker for the last Q-value updated
 
-    def _state_to_key(self, state_obs):
-        """
-        Use chars array to find agent position. Pure positional state - no goal info.
-        """
-        chars = state_obs['chars']
-        
-        # Find agent position in chars array
-        agent_positions = np.where(chars == ord('@'))
-        
-        if len(agent_positions[0]) > 0:
-            # Normal case: agent exists in chars
-            agent_x = int(agent_positions[0][0])
-            agent_y = int(agent_positions[1][0])
-            return (agent_x, agent_y)
-        else:
-            # Death state: agent '@' has disappeared, use last known position from blstats
-            return (int(state_obs['blstats'][0]), int(state_obs['blstats'][1]))
-
     def act(self, state_obs):
-        state_key = self._state_to_key(state_obs)
+        # Assuming self.state_representation_type is set to 'coords' or similar
+        state_key = commons.get_state_representation(state_obs, self.state_representation_type)
+        if state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key from state_obs: {state_obs}. Taking random action.")
+            return self.action_space.sample()
         self._ensure_q_state_exists(state_key)
 
         self.step_count += 1
@@ -231,15 +192,25 @@ class SARSAAgent(commons.AbstractAgent):
                     best_actions.append(action_idx)
             if not best_actions: # Fallback if all Q-values are -inf or state not found (should be rare)
                 return self.action_space.sample()
-            return random.choice(best_actions)
+            
+            selected_action = random.choice(best_actions)
+            return selected_action
 
     def learn(self, state, action, reward, next_state, next_action_on_policy, done, truncated):
         if not self.learning:
             return
 
-        state_key = self._state_to_key(state)
-        next_state_key = self._state_to_key(next_state)
+        # Assuming self.state_representation_type is set to 'coords' or similar
+        state_key = commons.get_state_representation(state, self.state_representation_type)
+        if state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key during learn (state): {state}. Skipping learn step.")
+            return
+        next_state_key = commons.get_state_representation(next_state, self.state_representation_type)
         
+        if state_key is None or next_state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key/next_state_key during learn. State: {state}, Next: {next_state}. Skipping learn step.")
+            return
+
         current_q = self._get_q_value(state_key, action)
         
         # next_action_on_policy is a_prime for SARSA
@@ -283,27 +254,12 @@ class QLearningAgent(commons.AbstractAgent):
         self.DEBUG_START_STATE = (1,1) 
         self.GOAL_REWARD_VALUE = UNIVERSAL_REWARD_PARAMS.get("goal_reward", 5000) # Get goal reward for debug condition
 
-    def _state_to_key(self, state_obs):
-        """
-        Use chars array to find agent position. Pure positional state - no goal info.
-        Fallback to blstats needed for death states where '@' disappears.
-        """
-        chars = state_obs['chars']
-        
-        # Find agent position in chars array
-        agent_positions = np.where(chars == ord('@'))
-        
-        if len(agent_positions[0]) > 0:
-            # Normal case: agent exists in chars
-            agent_x = int(agent_positions[0][0])
-            agent_y = int(agent_positions[1][0])
-            return (agent_x, agent_y)
-        else:
-            # Death state: agent '@' has disappeared, use last known position from blstats
-            return (int(state_obs['blstats'][0]), int(state_obs['blstats'][1]))
-
     def act(self, state_obs):
-        state_key = self._state_to_key(state_obs)
+        # Assuming self.state_representation_type is set to 'coords' or similar
+        state_key = commons.get_state_representation(state_obs, self.state_representation_type)
+        if state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key from state_obs: {state_obs}. Taking random action.")
+            return self.action_space.sample()
         self._ensure_q_state_exists(state_key)
 
         self.step_count += 1
@@ -337,9 +293,17 @@ class QLearningAgent(commons.AbstractAgent):
         if not self.learning:
             return
 
-        state_key = self._state_to_key(state)
-        next_state_key = self._state_to_key(next_state)
+        # Assuming self.state_representation_type is set to 'coords' or similar
+        state_key = commons.get_state_representation(state, self.state_representation_type)
+        if state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key during learn (state): {state}. Skipping learn step.")
+            return
+        next_state_key = commons.get_state_representation(next_state, self.state_representation_type)
         
+        if state_key is None or next_state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive state_key/next_state_key during learn. State: {state}, Next: {next_state}. Skipping learn step.")
+            return
+
         current_q = self._get_q_value(state_key, action)
         
         # Determine the value of max Q(s',a') for the next state s'
@@ -373,8 +337,6 @@ class QLearningAgent(commons.AbstractAgent):
 
         current_episode_display = episode_num + 1 if episode_num is not None else "N/A"
         last_q_display = f"{self.last_updated_q:.4f}" if self.last_updated_q is not None else "N/A"
-        print(f"Q-Value of last episode is: {last_q_display}")
-
         self.step_count = 0 
         self.last_updated_q = None
         pass
@@ -401,8 +363,17 @@ class DynaQAgent(QLearningAgent): # Inherits from QLearningAgent
             return
 
         # 2. Update the model
-        state_key = self._state_to_key(state)
-        next_state_key = self._state_to_key(next_state)
+        # Assuming self.state_representation_type is set to 'coords' or similar
+        state_key = commons.get_state_representation(state, self.state_representation_type)
+        if state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive model state_key during learn. State: {state}. Skipping model update.")
+            return
+        next_state_key = commons.get_state_representation(next_state, self.state_representation_type)
+        
+        if state_key is None or next_state_key is None: # Handle case where state representation fails
+            # print(f"Warning: Could not derive model state_key/next_state_key during learn. State: {state}, Next: {next_state}. Skipping model update.")
+            return
+
         if state_key not in self.model:
             self.model[state_key] = {}
         self.model[state_key][action] = (reward, next_state_key, done) # Store 'done' from real experience
