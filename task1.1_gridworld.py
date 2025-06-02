@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('TkAgg') # Re-enable TkAgg backend
+matplotlib.use('Agg') # Use Agg backend for non-interactive plotting
 import minihack_env as me
 import matplotlib.pyplot as plt
 import commons
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     file_path = os.path.join(output_dir, "average_returns.png")
     plt.savefig(file_path)
     print(f"\nAverage returns plot saved to {file_path}")
-    plt.show() # Still show the plot if possible
+    #plt.show()
 
     print("\nVisualizing first 10 steps of a new episode:")
     task.visualize_episode(max_number_steps=10)

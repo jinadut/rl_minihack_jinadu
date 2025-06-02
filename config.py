@@ -3,11 +3,11 @@
 # --- Shared parameters for all learning agents ---
 AGENT_BASE_PARAMS = {
     "gamma": 0.99,
-    "epsilon_start": 1.0,
+    "epsilon_start": 0.3,
     "epsilon_min": 0.1,
     "epsilon_decay_strategy": "linear",
     "epsilon_decay_rate": 0.98,
-    "q_table_default_value": 0.0
+    "q_table_default_value": 1.0
 }
 
 # --- Parameters specific to Q-Learning Agent ---
@@ -48,7 +48,7 @@ UNIVERSAL_REWARD_PARAMS = {
 
 # --- General Training/Environment Parameters (can be expanded) ---
 TRAINING_PARAMS = {
-    "num_episodes_train": 3500,
+    "num_episodes_train": 1000,
     "num_episodes_visualize": 0,
     "max_steps_visualize": 100,
 
@@ -56,5 +56,5 @@ TRAINING_PARAMS = {
     "visualize_in_training": False,
     "visualize_every_n_episodes": 100,
     "max_steps_for_viz_in_train": 1000,
-    "max_episode_steps_global": 1000
+    "max_episode_steps_global": 500
 }

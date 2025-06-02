@@ -23,7 +23,7 @@ for env_name, env_id in environments.items():
     
     # Create and train model with MultiInputPolicy
     model = PPO("MultiInputPolicy", env, verbose=1)
-    model.learn(total_timesteps=10000, log_interval=4)
+    model.learn(total_timesteps=1000000, log_interval=4)
     
     # Save model to the macOS host directory
     model_path = os.path.join(mac_host_models_dir, f"ppo_{env_name.lower()}")
